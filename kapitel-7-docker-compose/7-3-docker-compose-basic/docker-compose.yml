@@ -1,0 +1,46 @@
+services:
+  webserver:
+    image: nginx:latest
+    container_name: webserver
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+    networks:
+      - app-network
+
+  api:
+    image: node:18
+    container_name: api
+    working_dir: /app
+    volumes:
+      - ./api:/app
+    command: sh -c "npm install && npm start"
+    environment:
+      - NODE_ENV=development
+      - DB_HOST=db
+      - DB_USER=root
+      - DB_PASSWORD=my-secret-pw
+      - DB_NAME=appdb
+    depends_on:
+      - db
+    networks:
+      - app-network
+
+  db:
+    image: mysql:5.7
+    container_name: db
+    environment:
+      - MYSQL_ROOT_PASSWORD=my-secret-pw
+      - MYSQL_DATABASE=appdb
+    volumes:
+      - db-data:/var/lib/mysql
+    networks:
+      - app-network
+
+volumes:
+  db-data:
+
+networks:
+  app-network:
+    driver: bridge
