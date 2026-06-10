@@ -1,0 +1,103 @@
+# Case Study 7.4.C.01 – Docker Compose
+# Lokale Entwicklungs- und Testumgebung für:
+# - React-Frontend
+# - Node.js-Backend/API
+# - MySQL-Datenbank
+
+services:
+  database:
+    image: mysql:5.7
+    container_name: mysql-database
+
+    # Konfiguration der MySQL-Datenbank über Umgebungsvariablen.
+    environment:
+      - MYSQL_ROOT_PASSWORD=my-secret-pw
+      - MYSQL_DATABASE=appdb
+      - MYSQL_USER=appuser
+      - MYSQL_PASSWORD=app-password
+
+    # Persistente Speicherung der Datenbankdaten.
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+    # Healthcheck stellt sicher, dass MySQL erreichbar ist,
+    # bevor abhängige Services starten.
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-pmy-secret-pw"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - app-network
+
+  backend:
+    image: node:18
+    container_name: node-backend
+    working_dir: /app
+
+    # Lokaler Backend-Code wird in den Container gemountet.
+    volumes:
+      - ./backend:/app
+
+    # Beispielhafter Startbefehl für eine Node.js-API.
+    command: sh -c "npm install && npm start"
+
+    # Backend-Konfiguration über Umgebungsvariablen.
+    # DB_HOST verweist auf den Servicenamen der Datenbank.
+    environment:
+      - NODE_ENV=development
+      - DB_HOST=database
+      - DB_PORT=3306
+      - DB_USER=appuser
+      - DB_PASSWORD=app-password
+      - DB_NAME=appdb
+
+    # Backend wartet, bis die Datenbank als healthy gilt.
+    depends_on:
+      database:
+        condition: service_healthy
+
+    networks:
+      - app-network
+
+  frontend:
+    image: node:18
+    container_name: react-frontend
+    working_dir: /app
+
+    # Lokaler Frontend-Code wird für Entwicklung/Test gemountet.
+    volumes:
+      - ./frontend:/app
+
+    # Beispielhafter Startbefehl für eine React-App.
+    command: sh -c "npm install && npm start"
+
+    # Frontend-Konfiguration.
+    # Das Frontend kann intern über den Servicenamen backend kommunizieren.
+    environment:
+      - NODE_ENV=development
+      - REACT_APP_API_URL=http://backend:3000
+
+    # Frontend startet nach dem Backend.
+    depends_on:
+      - backend
+
+    # Frontend ist von außen erreichbar.
+    ports:
+      - "3000:3000"
+
+    networks:
+      - app-network
+
+volumes:
+  # Benanntes Volume für persistente MySQL-Daten.
+  mysql-data:
+
+networks:
+  # Gemeinsames Bridge-Netzwerk für interne Kommunikation.
+  # Services erreichen sich über ihre Servicenamen:
+  # frontend -> backend
+  # backend  -> database
+  app-network:
+    driver: bridge
