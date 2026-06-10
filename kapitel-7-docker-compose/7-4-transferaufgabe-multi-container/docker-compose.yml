@@ -1,0 +1,98 @@
+# Transferaufgabe 7.4.A.01 – Docker Compose
+# Multi-Container-Anwendung mit:
+# - frontend: nach außen über Port 80 erreichbar
+# - backend: nur intern über Port 5000 erreichbar
+# - database: interne MySQL-Datenbank mit persistentem Volume
+
+services:
+  frontend:
+    image: nginx:latest
+    container_name: frontend
+
+    # Das Frontend ist von außen über Port 80 erreichbar.
+    ports:
+      - "80:80"
+
+    # Das Frontend soll mit dem Backend kommunizieren können.
+    depends_on:
+      - backend
+
+    networks:
+      - app-network
+
+  backend:
+    image: node:18
+    container_name: backend
+    working_dir: /app
+
+    # Beispielhafter Startbefehl für einen API-Service auf Port 5000.
+    command: sh -c "npm install && npm start"
+
+    # Lokaler Backend-Code kann bei Bedarf in den Container gemountet werden.
+    volumes:
+      - ./backend:/app
+
+    # Das Backend wird über Umgebungsvariablen konfiguriert.
+    # DB_HOST verweist auf den Servicenamen der Datenbank.
+    environment:
+      - NODE_ENV=development
+      - API_PORT=5000
+      - DB_HOST=database
+      - DB_PORT=3306
+      - DB_USER=appuser
+      - DB_PASSWORD=app-password
+      - DB_NAME=appdb
+
+    # Das Backend wartet, bis die Datenbank verfügbar ist.
+    depends_on:
+      database:
+        condition: service_healthy
+
+    # Kein Port-Mapping nach außen:
+    # Das Backend ist nur intern im app-network erreichbar.
+    expose:
+      - "5000"
+
+    networks:
+      - app-network
+
+  database:
+    image: mysql:5.7
+    container_name: database
+
+    # Datenbankkonfiguration über Umgebungsvariablen.
+    environment:
+      - MYSQL_ROOT_PASSWORD=my-secret-pw
+      - MYSQL_DATABASE=appdb
+      - MYSQL_USER=appuser
+      - MYSQL_PASSWORD=app-password
+
+    # Persistente Speicherung der Datenbankdaten.
+    volumes:
+      - db-data:/var/lib/mysql
+
+    # Healthcheck prüft, ob MySQL verfügbar ist.
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-pmy-secret-pw"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    # Kein Port-Mapping nach außen:
+    # Die Datenbank ist nur intern erreichbar.
+    expose:
+      - "3306"
+
+    networks:
+      - app-network
+
+# Benanntes Volume für persistente Datenbankdaten.
+volumes:
+  db-data:
+
+# Benutzerdefiniertes Bridge-Netzwerk für interne Service-Kommunikation.
+# frontend -> backend:5000
+# backend  -> database:3306
+networks:
+  app-network:
+    driver: bridge
