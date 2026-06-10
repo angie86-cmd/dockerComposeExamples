@@ -1,0 +1,88 @@
+# Übung 7.4.Ü.01 – Docker Compose
+# Anwendung mit drei Services:
+# - frontend: Web-Frontend mit Nginx, nach außen über Port 80 erreichbar
+# - backend: API-Backend mit Node.js, wartet auf eine gesunde Datenbank
+# - database: MySQL-Datenbank mit persistentem Volume
+
+services:
+  frontend:
+    image: nginx:latest
+    container_name: web-frontend
+
+    # Der Webserver ist von außen über http://localhost erreichbar.
+    ports:
+      - "80:80"
+
+    # Das Frontend soll nach dem Backend gestartet werden.
+    depends_on:
+      - backend
+
+    # Gemeinsames Netzwerk für interne Service-Kommunikation.
+    networks:
+      - app-network
+
+  backend:
+    image: node:18
+    container_name: api-backend
+    working_dir: /app
+
+    # Lokaler Code wird in den Container gemountet,
+    # damit Änderungen im Backend-Code direkt verfügbar sind.
+    volumes:
+      - ./backend:/app
+
+    # Beispielhafter Startbefehl für eine Node.js-API.
+    command: sh -c "npm install && npm start"
+
+    # Konfiguration des Backends über Umgebungsvariablen.
+    # DB_HOST verweist auf den Servicenamen der Datenbank.
+    environment:
+      - NODE_ENV=development
+      - DB_HOST=database
+      - DB_USER=root
+      - DB_PASSWORD=my-secret-pw
+      - DB_NAME=appdb
+
+    # Das Backend wartet, bis die Datenbank als healthy gilt.
+    depends_on:
+      database:
+        condition: service_healthy
+
+    networks:
+      - app-network
+
+  database:
+    image: mysql:5.7
+    container_name: database
+
+    # Initiale Datenbankkonfiguration.
+    environment:
+      - MYSQL_ROOT_PASSWORD=my-secret-pw
+      - MYSQL_DATABASE=appdb
+
+    # Persistente Speicherung der MySQL-Daten.
+    volumes:
+      - db-data:/var/lib/mysql
+
+    # Healthcheck prüft, ob MySQL erreichbar ist.
+    # Erst danach startet das Backend.
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-pmy-secret-pw"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - app-network
+
+# Benanntes Volume für persistente Datenbankdaten.
+volumes:
+  db-data:
+
+# Benutzerdefiniertes Bridge-Netzwerk für die interne Kommunikation.
+# Services können sich über ihre Servicenamen erreichen:
+# frontend -> backend
+# backend  -> database
+networks:
+  app-network:
+    driver: bridge
