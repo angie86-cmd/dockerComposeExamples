@@ -1,0 +1,37 @@
+services:
+  app:
+    # Name des Docker-Images für die Anwendung.
+    image: myapp:latest
+
+    # Baut das Image aus dem aktuellen Verzeichnis.
+    build:
+      context: .
+
+    # Macht das Container-Dateisystem schreibgeschützt.
+    # Dadurch können Dateien im Container nicht unkontrolliert verändert werden.
+    read_only: true
+
+    # Stellt temporäre beschreibbare Verzeichnisse im Arbeitsspeicher bereit.
+    # Das ist notwendig, wenn die Anwendung z. B. /tmp oder Cache-Verzeichnisse benötigt.
+    tmpfs:
+      - /tmp
+      - /var/cache
+
+    # Entfernt alle Linux-Capabilities.
+    # Dadurch läuft der Container mit minimalen Berechtigungen.
+    cap_drop:
+      - ALL
+
+    # Verhindert, dass Prozesse im Container zusätzliche Rechte erhalten.
+    security_opt:
+      - no-new-privileges:true
+
+    # Begrenzung der Ressourcen, die der Container verwenden darf.
+    deploy:
+      resources:
+        limits:
+          # Maximal 0,5 CPU-Kerne.
+          cpus: "0.5"
+
+          # Maximal 512 MB RAM.
+          memory: 512M
